@@ -1,32 +1,44 @@
 {
-    "name": "dusterio/laravel-aws-worker",
+    "name": "charliepage88/laravel-aws-worker",
     "type": "library",
     "description": "Run Laravel (or Lumen) tasks and queue listeners inside of AWS Elastic Beanstalk workers",
     "keywords": ["php","laravel","lumen","sqs","aws","elasticbeanstalk","worker"],
-    "homepage": "https://github.com/dusterio/laravel-aws-worker",
+    "homepage": "https://github.com/charliepage88/laravel-aws-worker",
     "license": "MIT",
     "authors": [
         {
             "name": "Denis Mysenko",
             "email": "denis@mysenko.com",
             "homepage": "https://www.mysenko.com"
+        },
+
+        {
+            "name": "Charles Page",
+            "email": "charliepage88@gmail.com",
+            "homepage": "https://www.charliepage88.com"
         }
     ],
     "require": {
-        "php": ">=5.5.0",
-        "illuminate/support": "5.*",
-	    "illuminate/queue": "5.*",
-	    "illuminate/bus": "5.*",
-	    "aws/aws-sdk-php": "~3.0",
-        "illuminate/http": "5.*"
+        "php": "^7.1.3",
+        "illuminate/support": "^5.8",
+	"illuminate/queue": "^5.8",
+	"illuminate/bus": "^5.8",
+	"aws/aws-sdk-php": "^3.110",
+        "illuminate/http": "^5.8"
     },
     "require-dev": {
-        "phpunit/phpunit": "3.7.*",
-        "codeclimate/php-test-reporter": "dev-master"
+        "phpunit/phpunit": "^7.5"
     },
     "autoload": {
         "psr-4": {
             "Dusterio\\AwsWorker\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Dusterio\\AwsWorker\\Integrations\\LaravelServiceProvider"
+            ]
         }
     }
 }

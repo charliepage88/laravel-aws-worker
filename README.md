@@ -8,63 +8,32 @@
 
 Run Laravel (or Lumen) tasks and queue listeners inside of AWS Elastic Beanstalk workers
 
-## Overview
+## Credit
 
-Laravel documentation recommends to use supervisor for queue workers and *IX cron for scheduled tasks. However, when deploying your application to AWS Elastic Beanstalk, neither option is available.
+Package created by:
 
-This package helps you run your Laravel (or Lumen) jobs in AWS worker environments.
+![dusterio](https://github.com/dusterio/laravel-aws-worker)
 
-![Standard Laravel queue flow](https://www.mysenko.com/images/queues-laravel.png)
-![AWS Elastic Beanstalk flow](https://www.mysenko.com/images/queues-aws_eb.png)
+## Installation
+
+Create a web beanstalk environment and a worker beanstalk environment.
 
 ## Dependencies
 
-* PHP >= 5.5
-* Laravel (or Lumen) >= 5.1
+* PHP >= 7.1.3
+* Laravel >= 5.8
 
-## Scheduled tasks
+## Installation via Composer
 
-You remember how Laravel documentation advised you to invoke the task scheduler? Right, by running ```php artisan schedule:run``` on regular basis, and to do that we had to add an entry to our cron file:
+To install simply run:
 
-```bash
-* * * * * php /path/to/artisan schedule:run >> /dev/null 2>&1
+```
+composer require charliepage88/laravel-aws-worker
 ```
 
-AWS doesn't allow you to run *IX commands or to add cron tasks directly. Instead, you have to make regular HTTP (POST, to be precise) requests to your worker endpoint.
+### Worker
 
-Add cron.yaml to the root folder of your application (this can be a part of your repo or you could add this file right before deploying to EB - the important thing is that this file is present at the time of deployment):
-
-```yaml
-version: 1
-cron:
- - name: "schedule"
-   url: "/worker/schedule"
-   schedule: "* * * * *"
-```
-
-From now on, AWS will do POST /worker/schedule to your endpoint every minute - kind of the same effect we achieved when editing a UNIX cron file. The important difference here is that the worker environment still has to run a web process in order to execute scheduled tasks.
-
-Your scheduled tasks should be defined in ```App\Console\Kernel::class``` - just where they normally live in Laravel, eg.:
-
-```php
-protected function schedule(Schedule $schedule)
-{
-    $schedule->command('inspire')
-              ->everyMinute();
-}
-```
-
-## Queued jobs: SQS
-
-Normally Laravel has to poll SQS for new messages, but in case of AWS Elastic Beanstalk messages will come to us – inside of POST requests from the AWS daemon. 
-
-Therefore, we will create jobs manually based on SQS payload that arrived, and pass that job to the framework's default worker. From this point, the job will be processed the way it's normally processed in Laravel. If it's processed successfully,
-our controller will return a 200 HTTP status and AWS daemon will delete the job from the queue. Again, we don't need to poll for jobs and we don't need to delete jobs - that's done by AWS in this case.
-
-If you dispatch jobs from another instance of Laravel or if you are following Laravel's payload format ```{"job":"","data":""}``` you should be okay to go. If you want to receive custom format JSON messages, you may want to install 
-[Laravel plain SQS](https://github.com/dusterio/laravel-plain-sqs) package as well.
-
-## Configuring the queue
+#### Configuring the queue
 
 Every time you create a worker environment in AWS, you are forced to choose two SQS queues – either automatically generated ones or some of your existing queues. One of the queues will be for the jobs themselves, another one is for failed jobs – AWS calls this queue a dead letter queue.
 
@@ -99,60 +68,35 @@ Then go to ```config/queue.php``` and copy/paste details from AWS console:
 
 To generate key and secret go to Identity and Access Management in the AWS console. It's better to create a separate user that ONLY has access to SQS.
 
-## Installation via Composer
+### Notes
 
-To install simply run:
+Create a `cron.yaml` file inside project root with following contents:
 
-```
-composer require dusterio/laravel-aws-worker
-```
-
-Or add it to `composer.json` manually:
-
-```json
-{
-    "require": {
-        "dusterio/laravel-aws-worker": "~0.1"
-    }
-}
+```yaml
+version: 1
+cron:
+ - name: "schedule"
+   url: "/worker/schedule"
+   schedule: "* * * * *"
 ```
 
-### Usage in Laravel 5
+Inside of your `.env` file, set `REGISTER_WORKER_ROUTES` to `true`.
 
-```php
-// Add in your config/app.php
+Update SQS config info to point to a different SQS queue than what the worker is using. During testing thus far, this has resulted in high accuracy of jobs being processed.
 
-'providers' => [
-    '...',
-    'Dusterio\AwsWorker\Integrations\LaravelServiceProvider',
-];
-```
+Do not have the scheduler run via cron, since the `cron.yaml` will take care of that.
 
-After adding service provider, you should be able to see two special routes that we added:
+Use supervisor to make sure the queue is running. When a job hits the worker, the queue will be necessary to enter the Job and process.
 
-```bash
-$ php artisan route:list
-+--------+----------+-----------------+------+----------------------------------------------------------+------------+
-| Domain | Method   | URI             | Name | Action                                                   | Middleware |
-+--------+----------+-----------------+------+----------------------------------------------------------+------------+
-|        | POST     | worker/queue    |      | Dusterio\AwsWorker\Controllers\WorkerController@queue    |            |
-|        | POST     | worker/schedule |      | Dusterio\AwsWorker\Controllers\WorkerController@schedule |            |
-+--------+----------+-----------------+------+----------------------------------------------------------+------------+
-```
+### Web
 
-Environment variable ```REGISTER_WORKER_ROUTES``` is used to trigger binding of the two routes above. If you run the same application in both web and worker environments,
-don't forget to set ```REGISTER_WORKER_ROUTES``` to ```false``` in your web environment. You don't want your regular users to be able to invoke scheduler or queue worker.
+Inside of your `.env` file, set `REGISTER_WORKER_ROUTES` to `false`.
 
-This variable is set to ```true``` by default at this moment.
+Update SQS config info to point to created worker environment.
 
-So that's it - if you (or AWS) hits ```/worker/queue```, Laravel will process one queue item (supplied in the POST). And if you hit ```/worker/schedule```, we will run the scheduler (it's the same as to run ```php artisan schedule:run``` in shell).
+Do not have the scheduler run via cron and make sure the queue is set to `sqs`.
 
-### Usage in Lumen 5
-
-```php
-// Add in your bootstrap/app.php
-$app->register(Dusterio\AwsWorker\Integrations\LumenServiceProvider::class);
-```
+Use supervisor to make sure the queue is running and sending jobs to the worker beanstalk.
 
 ## Errors and exceptions
 
@@ -161,7 +105,7 @@ Please make sure that two special routes are not mounted behind a CSRF middlewar
 If your job fails, we will throw a ```FailedJobException```. If you want to customize error output – just customise your exception handler.
 Note that your HTTP status code must be different from 200 in order for AWS to realize the job has failed.
 
-## ToDo
+## TODO
 
 1. Add support for AWS dead letter queue (retry jobs from that queue?)
 
